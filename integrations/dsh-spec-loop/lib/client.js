@@ -58,13 +58,13 @@ window.__ModuleLoader__.load({
 				{
 					type: "button",
 					className: "ds-spec-loop-toggle" + (on ? " is-on" : ""),
-					title: on ? "Spec Loop 已常驻上下文，点击关闭" : "点击将 ds-spec-loop 技能常驻上下文",
+					title: on ? "谨慎模式已开启（ds-spec-loop 技能常驻上下文），点击关闭" : "开启谨慎模式：将 ds-spec-loop 技能常驻上下文",
 					"aria-pressed": on,
 					disabled: enabled === null || busy,
 					onClick: toggle,
 				},
 				React.createElement("span", { className: "ds-spec-loop-dot" }),
-				"Spec Loop",
+				"谨慎模式",
 			);
 		}
 
@@ -79,7 +79,7 @@ window.__ModuleLoader__.load({
 			}, "dsh-spec-loop: styles");
 
 			ctx.slots.inject("conversation.input.left", () => ctx.slots.register(
-				{ name: "conversation.input.left", id: "ds-spec-loop-toggle", order: 10, label: "Spec Loop" },
+				{ name: "conversation.input.left", id: "ds-spec-loop-toggle", order: 10, label: "谨慎模式" },
 				(props) => React.createElement(SpecLoopToggle, { sessionId: props.sessionId }),
 			));
 		};
