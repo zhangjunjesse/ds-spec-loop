@@ -1,0 +1,8 @@
+# Bundle wiring for `dsh plugin add` / registry installs.
+#
+# Without this file the package declares only `dsh.client`, which is NOT
+# installable — the harness has no row to mount, so the plugin never loads.
+# `dsh.bundle.patch` in package.json points here, and this insert is the row.
+- insert:
+    - id: spec-loop
+      name: dsh-spec-loop
