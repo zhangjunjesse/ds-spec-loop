@@ -1,7 +1,7 @@
 {
   "name": "dsh-spec-loop",
-  "version": "0.1.0",
-  "description": "Composer toggle that pins the ds-spec-loop skill into the system prompt, per session. Host: prompt section + loopback JSON API; Client: a Spec Loop pill in the composer tool row.",
+  "version": "0.2.0",
+  "description": "Composer toggle that pins the ds-spec-loop skill into the conversation as a <spec-loop>-tagged user message, per session, with a built-in viewer/editor. Host: agent/pre-step injection + loopback JSON API; Client: a Spec Loop pill plus an edit panel in the composer tool row.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
