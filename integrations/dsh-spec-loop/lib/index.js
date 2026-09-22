@@ -280,15 +280,46 @@ export function wrapText(bodies) {
  * pruned events from it, which is exactly when the text must be re-injected.
  * Comparing the whole wrapped string means an edit, a reorder, or a selection
  * change all re-inject with no extra bookkeeping.
+ *
+ * The session is read through its PUBLIC surface API — `surface.nodes` (the
+ * ordered seq list the model sees) plus `eventAt(seq)`. An earlier version
+ * read `session.events`, which no DSH `Session` has: `Session` exposes its log
+ * as the private `log` field and the surface as `SurfaceManager { nodes }`, so
+ * that read yielded `undefined` on EVERY step and the `liveInjectionText(...)
+ * === wrapped` guard silently degraded this plugin into "append a fresh copy on
+ * every step" — one injected user message per step, which is precisely the
+ * prompt-cache invalidation this detection exists to avoid.
  * @param session - the agent's session.
  * @returns the wrapped text of the live injection, or undefined when none is.
  */
 export function liveInjectionText(session) {
-  const events = session?.events
+  if (session === undefined || session === null) return undefined
+
+  // Real Session shape: walk the model-visible surface backwards and resolve
+  // each node through `eventAt`. Nodes that left the surface are simply absent,
+  // so the newest copy still on the surface governs.
+  const eventAt = session.eventAt
+  let nodes
+  try {
+    nodes = session.surface?.nodes
+  } catch {
+    nodes = undefined
+  }
+  if (typeof eventAt === 'function' && Array.isArray(nodes)) {
+    for (let index = nodes.length - 1; index >= 0; index -= 1) {
+      const text = textOfOwnInjection(eventAt.call(session, nodes[index]))
+      if (text !== undefined) return text
+    }
+    return undefined
+  }
+
+  // Test-double shape only: an explicit `events` array. Kept so unit tests can
+  // still hand the detector a literal log; never the live path.
+  const events = session.events
   if (!Array.isArray(events)) return undefined
   let surface
   try {
-    surface = new Set(session.surface?.nodes ?? [])
+    surface = new Set(nodes ?? [])
   } catch {
     return undefined
   }
@@ -298,10 +329,18 @@ export function liveInjectionText(session) {
     const source = event.data?.source
     if (source?.kind !== 'plugin' || source.plugin !== name) continue
     if (!surface.has(event.seq)) return undefined
-    const block = (event.data.content ?? []).find((entry) => entry?.type === 'text')
-    return typeof block?.text === 'string' ? block.text : undefined
+    return textOfOwnInjection(event)
   }
   return undefined
+}
+
+/** The text block of one event when it is this plugin's own user message. */
+function textOfOwnInjection(event) {
+  if (event?.type !== 'user/message') return undefined
+  const source = event.data?.source
+  if (source?.kind !== 'plugin' || source.plugin !== name) return undefined
+  const block = (event.data.content ?? []).find((entry) => entry?.type === 'text')
+  return typeof block?.text === 'string' ? block.text : undefined
 }
 
 /** Accept only same-machine browsers (loopback Host header). */

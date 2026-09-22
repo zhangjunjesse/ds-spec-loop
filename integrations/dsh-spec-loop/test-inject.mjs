@@ -68,7 +68,59 @@ const userMessage = (seq) => ({
   data: { source: { kind: 'user' }, content: [{ type: 'text', text: 'hi' }] },
 })
 
+/**
+ * A session shaped like a REAL DSH `Session`: `surface.nodes` is the ordered
+ * seq list the model sees and `eventAt(seq)` resolves a seq against the log.
+ * `events` is deliberately NOT attached — the live object has no such field,
+ * and the old detector read it, silently failed, and re-injected every step.
+ * @param events - the session log.
+ * @param surfaceSeqs - seqs currently on the surface.
+ * @returns the session double.
+ */
+const realSession = (events, surfaceSeqs) => {
+  const log = new Map(events.map((event) => [event.seq, event]))
+  return {
+    surface: { nodes: surfaceSeqs },
+    eventAt(seq) {
+      return log.get(seq)
+    },
+  }
+}
+
 {
+  // Real Session shape (the shape that actually broke in production).
+  assert.equal(liveInjectionText(realSession([], [])), undefined, 'empty session → nothing live')
+  assert.equal(
+    liveInjectionText(realSession([userMessage(1)], [1])),
+    undefined,
+    'a plain user message is not our injection',
+  )
+  assert.equal(
+    liveInjectionText(realSession([ownMessage(2, 'X')], [2])),
+    'X',
+    'our injection still on the surface is live',
+  )
+  assert.equal(
+    liveInjectionText(realSession([ownMessage(2, 'X')], [])),
+    undefined,
+    'pruned by compaction → not live, so it must be re-injected',
+  )
+  assert.equal(
+    liveInjectionText(realSession([ownMessage(2, 'OLD'), ownMessage(5, 'NEW')], [2, 5])),
+    'NEW',
+    'the latest injection wins',
+  )
+  assert.equal(
+    liveInjectionText(realSession([ownMessage(2, 'OLD'), userMessage(5)], [2, 5])),
+    'OLD',
+    'a later non-injection node does not invalidate a live injection',
+  )
+  assert.equal(liveInjectionText(undefined), undefined, 'absent session → nothing live')
+  assert.equal(liveInjectionText({}), undefined, 'unknown session shape → nothing live')
+}
+
+{
+  // Legacy test-double shape (explicit `events` array) stays supported.
   assert.equal(liveInjectionText({ events: [], surface: { nodes: [] } }), undefined, 'no events → nothing live')
   assert.equal(
     liveInjectionText({ events: [userMessage(1)], surface: { nodes: [1] } }),
@@ -133,9 +185,13 @@ async function decide(preStep, agent, messages = []) {
   )
 }
 
+// Built like a real Session: surface.nodes + eventAt(seq), no `events` field.
 const agentWith = (id, events, surfaceSeqs) => ({
   id,
-  session: { events, surface: { nodes: surfaceSeqs } },
+  session: {
+    surface: { nodes: surfaceSeqs },
+    eventAt: ((log) => (seq) => log.get(seq))(new Map(events.map((event) => [event.seq, event]))),
+  },
 })
 
 const bodyOf = (decision, at = 0) => decision.messages[at].content[0].text
